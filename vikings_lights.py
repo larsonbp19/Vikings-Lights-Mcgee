@@ -405,7 +405,7 @@ if __name__ == "__main__":
         # Run by GitHub every hour: only does anything if a Vikings game starts
         # within the next ~75 min or is already going. Otherwise exits in seconds.
         kickoff = next_kickoff()
-        if kickoff is None or kickoff - time.time() > 75 * 60:
+        if kickoff is None or kickoff - time.time() > 40 * 60:
             print("No Vikings game soon. Exiting.")
             sys.exit()
         if kickoff - 5 * 60 > time.time():
