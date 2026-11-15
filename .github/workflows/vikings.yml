@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "7,22,37,52 * * * *"      # check every hour
     - cron: "0 12 1 * *"      # monthly keep-alive (GitHub pauses idle schedules after 60 days)
+  push:
+    paths: ["test-now.txt"]   # changing this file runs the light test
   workflow_dispatch:
     inputs:
       test:
@@ -13,7 +15,7 @@ on:
 
 concurrency:
   # tests get their own lane so they never wait behind a game-watcher
-  group: vikings-${{ (github.event_name == 'workflow_dispatch' && inputs.test) && 'test' || 'watch' }}
+  group: vikings-${{ ((github.event_name == 'workflow_dispatch' && inputs.test) || github.event_name == 'push') && 'test' || 'watch' }}
   cancel-in-progress: false   # never run two watchers at once
 
 permissions:
@@ -30,7 +32,7 @@ jobs:
           python-version: "3.12"
 
       - name: Test lights
-        if: github.event_name == 'workflow_dispatch' && inputs.test
+        if: (github.event_name == 'workflow_dispatch' && inputs.test) || github.event_name == 'push'
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           ALL_VARS: ${{ toJSON(vars) }}
@@ -51,7 +53,7 @@ jobs:
         run: python vikings_lights.py --github
 
       - name: Save light list for the app
-        if: always() && github.event.schedule != '0 12 1 * *'
+        if: always() && github.event.schedule != '0 12 1 * *' && github.event_name != 'push'
         run: |
           [ -f lights.json ] || exit 0
           git config user.name "vikings-bot"
