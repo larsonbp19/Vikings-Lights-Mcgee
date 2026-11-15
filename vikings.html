@@ -119,6 +119,8 @@
     <div class="savebar">
       <button class="primary" id="save">Save</button>
       <div style="height:10px"></div>
+      <button class="primary" id="watch">Start watching the game now</button>
+      <div style="height:10px"></div>
       <button class="gold" id="test">Test my lights now</button>
       <button class="ghost" id="signout">Disconnect this phone</button>
     </div>
@@ -286,6 +288,11 @@
   $("enabled").onchange = () => { save(); };
   $("save").onclick = () => save();
   $("test").onclick = test;
+  $("watch").onclick = async () => {
+    const b = $("watch"); b.disabled = true; b.textContent = "Starting…";
+    try { await runWorkflow(false); toast("Watching now. Lights flash on the next score."); b.textContent = "Watching ✓"; }
+    catch (e) { toast(e.status === 403 ? "The key needs Actions: Read and write." : e.message); b.disabled = false; b.textContent = "Start watching the game now"; }
+  };
   $("signout").onclick = () => { store.del("gh_token"); token = null; start(); };
   start();
 })();
