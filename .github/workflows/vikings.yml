@@ -5,7 +5,7 @@ on:
     - cron: "7,22,37,52 * * * *"      # check every hour
     - cron: "0 12 1 * *"      # monthly keep-alive (GitHub pauses idle schedules after 60 days)
   push:
-    paths: ["test-now.txt", "watch-now.txt"]   # Claude can start a test or a watcher by changing these
+    paths: ["test-now.txt", "watch-now.txt", "cleanup-now.txt"]   # Claude can start a test or a watcher by changing these
   workflow_dispatch:
     inputs:
       test:
@@ -15,7 +15,7 @@ on:
 
 concurrency:
   # tests get their own lane so they never wait behind a game-watcher
-  group: vikings-${{ ((github.event_name == 'workflow_dispatch' && inputs.test) || (github.event_name == 'push' && !contains(github.event.head_commit.message, 'Start watching'))) && 'test' || 'watch' }}
+  group: vikings-${{ contains(github.event.head_commit.message, 'Start cleanup') && 'cleanup' || (((github.event_name == 'workflow_dispatch' && inputs.test) || (github.event_name == 'push' && !contains(github.event.head_commit.message, 'Start watching'))) && 'test' || 'watch') }}
   cancel-in-progress: false   # never run two watchers at once
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
 
       - name: Test lights
-        if: (github.event_name == 'workflow_dispatch' && inputs.test) || (github.event_name == 'push' && !contains(github.event.head_commit.message, 'Start watching'))
+        if: (github.event_name == 'workflow_dispatch' && inputs.test) || (github.event_name == 'push' && !contains(github.event.head_commit.message, 'Start watching') && !contains(github.event.head_commit.message, 'Start cleanup'))
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           ALL_VARS: ${{ toJSON(vars) }}
@@ -44,6 +44,13 @@ jobs:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           ALL_VARS: ${{ toJSON(vars) }}
         run: python vikings_lights.py --names
+
+      - name: Cleanup helper
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, 'Start cleanup')
+        env:
+          GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          ALL_VARS: ${{ toJSON(vars) }}
+        run: python vikings_lights.py --cleanup
 
       - name: Watch for a Vikings game
         if: (github.event_name == 'schedule' && github.event.schedule == '7,22,37,52 * * * *') || (github.event_name == 'workflow_dispatch' && !inputs.test) || (github.event_name == 'push' && contains(github.event.head_commit.message, 'Start watching'))

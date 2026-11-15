@@ -352,6 +352,44 @@ def watch_game():
         time.sleep(POLL_LIVE)
 
 
+def cleanup_game():
+    """Helper for an older watcher that left off-lights on: remember which lights are off,
+    and after each flash, switch those back off."""
+    print("Cleanup helper running")
+    last = {"MIN": None, "OPP": None}
+    off = set()
+    next_snap = 0
+    while True:
+        try:
+            game = find_vikings_game()
+        except Exception as e:
+            print(f"ESPN error: {e}"); time.sleep(20); continue
+        if not game or game[0] == "post":
+            print("Game over, helper done"); return
+        state, score, opp, status, opp_score, _ = game
+        if state == "in" and time.time() >= next_snap:
+            snaps = all_lights(get_state)
+            off = {d["device"] for d, st in zip(DEVICES, snaps) if st.get("powerSwitch") in (0, "0", False)}
+            print(f"  {len(off)} light(s) off right now")
+            next_snap = time.time() + 60
+        wait = 0
+        if last["MIN"] is not None and score > last["MIN"] and (score - last["MIN"]) >= 2:
+            wait = (10 if score - last["MIN"] >= 6 else 5) + 15
+        if last["OPP"] is not None and opp_score > last["OPP"] and (opp_score - last["OPP"]) >= 2:
+            wait = max(wait, 5 * 1.0 + 15)
+        last["MIN"], last["OPP"] = score, opp_score
+        if wait and off:
+            time.sleep(wait)
+            targets = [d for d in DEVICES if d["device"] in off]
+            print(f"  Turning {len(targets)} light(s) back off")
+            for _ in range(2):
+                for d in targets:
+                    control(d, "devices.capabilities.on_off", "powerSwitch", 0)
+                time.sleep(8)
+            next_snap = time.time() + 30
+        time.sleep(8)
+
+
 def watch():
     """Sleeps until the next Vikings kickoff, watches the game, repeats."""
     from datetime import datetime
@@ -400,6 +438,9 @@ if __name__ == "__main__":
         sys.exit()
     if not LIGHTS_ENABLED and "--test" not in sys.argv:
         sys.exit("Paused (LIGHTS_ENABLED is false).")
+    if "--cleanup" in sys.argv:
+        cleanup_game()
+        sys.exit()
     if "--github" in sys.argv:
         # Run by GitHub every hour: only does anything if a Vikings game starts
         # within the next ~75 min or is already going. Otherwise exits in seconds.
