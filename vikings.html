@@ -190,7 +190,8 @@
     const box = $("lights");
     box.innerHTML = "";
     if (!lightNames.length) {
-      box.innerHTML = '<p class="muted">Your lights show up here after the first test. Tap "Test my lights now" below, wait a couple of minutes, then reopen this page.</p>';
+      box.innerHTML = '<p class="muted" id="loadMsg">Tap below to load your lights. Nothing will flash. It takes about 2 minutes.</p><button class="primary" id="loadLights">Load my lights</button>';
+      $("loadLights").onclick = loadMyLights;
       return;
     }
     for (const name of lightNames) {
@@ -228,15 +229,33 @@
     finally { $("save").disabled = false; $("save").textContent = "Save"; }
   }
 
+  async function runWorkflow(isTest) {
+    const wf = await (await gh("/actions/workflows")).json();
+    const w = (wf.workflows || []).find(x => x.name === "Vikings lights");
+    if (!w) throw new Error("Couldn't find the Vikings lights schedule file.");
+    const r = await gh(`/actions/workflows/${w.id}/dispatches`, { method: "POST", body: JSON.stringify({ ref: "main", inputs: { test: isTest } }) });
+    if (r.status === 404) throw new Error("Couldn't start it.");
+  }
+
+  async function loadMyLights() {
+    const btn = $("loadLights"); btn.disabled = true; btn.textContent = "Loading…";
+    try {
+      await runWorkflow(false);
+      $("loadMsg").textContent = "Getting your lights from Govee…";
+      for (let i = 0; i < 24; i++) {
+        await new Promise(r => setTimeout(r, 10000));
+        await loadLights();
+        if (lightNames.length) { render(); toast("Lights loaded"); return; }
+      }
+      $("loadMsg").textContent = "Still working. Close and reopen the app in a minute.";
+    } catch (e) { toast(e.status === 403 ? "The key needs Actions: Read and write." : e.message); btn.disabled = false; btn.textContent = "Load my lights"; }
+  }
+
   async function test() {
     await save(true);
     $("test").disabled = true; $("test").textContent = "Starting…";
     try {
-      const wf = await (await gh("/actions/workflows")).json();
-      const w = (wf.workflows || []).find(x => x.name === "Vikings lights");
-      if (!w) throw new Error("Couldn't find the Vikings lights schedule file.");
-      const r = await gh(`/actions/workflows/${w.id}/dispatches`, { method: "POST", body: JSON.stringify({ ref: "main", inputs: { test: true } }) });
-      if (r.status === 404) throw new Error("Couldn't start the test.");
+      await runWorkflow(true);
       toast("Test started. Lights flash in about a minute.");
     } catch (e) { toast(e.status === 403 ? "The key needs Actions: Read and write." : e.message); }
     finally { $("test").disabled = false; $("test").textContent = "Test my lights now"; }

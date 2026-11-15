@@ -382,6 +382,9 @@ if __name__ == "__main__":
         print(f"Using all {len(DEVICES)} color lights: " + ", ".join(d["name"] or d["sku"] for d in DEVICES))
     if not DEVICES:
         sys.exit("No color-capable Govee lights found on this account.")
+    if "--names" in sys.argv:
+        print("Saved light list for the app.")
+        sys.exit()
     if not LIGHTS_ENABLED and "--test" not in sys.argv:
         sys.exit("Paused (LIGHTS_ENABLED is false).")
     if "--github" in sys.argv:
