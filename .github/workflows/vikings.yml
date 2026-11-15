@@ -43,7 +43,7 @@ jobs:
         run: python vikings_lights.py --names
 
       - name: Watch for a Vikings game
-        if: github.event_name == 'schedule' && github.event.schedule == '40 * * * *'
+        if: (github.event_name == 'schedule' && github.event.schedule == '40 * * * *') || (github.event_name == 'workflow_dispatch' && !inputs.test)
         env:
           GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
           ALL_VARS: ${{ toJSON(vars) }}
