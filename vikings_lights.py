@@ -111,10 +111,20 @@ def control(dev, cap_type, instance, value):
             "capability": {"type": cap_type, "instance": instance, "value": value},
         },
     }
-    try:
-        govee("POST", "/device/control", body)
-    except urllib.error.HTTPError as e:
-        print(f"  Govee error on {dev['device']}: {e.code} {e.read().decode()[:200]}")
+    # Govee sometimes drops or rate-limits a command; retry so no light gets stuck.
+    for attempt in range(4):
+        try:
+            res = govee("POST", "/device/control", body)
+            code = res.get("code", 200) if isinstance(res, dict) else 200
+            if code in (200, "200"):
+                return True
+            print(f"  Govee said {code} for {dev.get('name') or dev['device']} ({instance}), retrying")
+        except urllib.error.HTTPError as e:
+            print(f"  Govee error {e.code} for {dev.get('name') or dev['device']} ({instance}), retrying")
+        except Exception as e:
+            print(f"  Govee problem for {dev.get('name') or dev['device']}: {e}, retrying")
+        time.sleep(1.5 * (attempt + 1))
+    return False
 
 
 def all_lights(fn):
@@ -219,6 +229,8 @@ def _finish(everything, snapshots):
     restore_pairs = [(d, s) for d, s in zip(everything, snapshots) if d["device"] in keep]
     DEVICES = [d for d, _ in restore_pairs]
     restore([s for _, s in restore_pairs])
+    time.sleep(4)
+    restore([s for _, s in restore_pairs])  # send it twice so a dropped command can't leave a light red/purple
     DEVICES = everything
 
 
