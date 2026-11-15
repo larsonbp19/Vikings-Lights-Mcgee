@@ -1,0 +1,53 @@
+name: Vikings lights
+
+on:
+  schedule:
+    - cron: "40 * * * *"      # check every hour
+    - cron: "0 12 1 * *"      # monthly keep-alive (GitHub pauses idle schedules after 60 days)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Run the light test now"
+        type: boolean
+        default: true
+
+concurrency:
+  group: vikings
+  cancel-in-progress: false   # never run two watchers at once
+
+permissions:
+  contents: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test lights
+        if: github.event_name == 'workflow_dispatch' && inputs.test
+        env:
+          GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          ALL_VARS: ${{ toJSON(vars) }}
+        run: python vikings_lights.py --test
+
+      - name: Watch for a Vikings game
+        if: github.event_name == 'schedule' && github.event.schedule == '40 * * * *'
+        env:
+          GOVEE_API_KEY: ${{ secrets.GOVEE_API_KEY }}
+          ALL_VARS: ${{ toJSON(vars) }}
+        run: python vikings_lights.py --github
+
+      - name: Keep-alive
+        if: github.event.schedule == '0 12 1 * *'
+        run: |
+          date > .keepalive
+          git config user.name "vikings-bot"
+          git config user.email "vikings-bot@users.noreply.github.com"
+          git add .keepalive
+          git commit -m "keep-alive"
+          git push
