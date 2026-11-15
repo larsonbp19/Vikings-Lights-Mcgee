@@ -63,9 +63,16 @@ FLASH_SECONDS = _num("FLASH_SECONDS", 10)        # how long lights flash for a V
 FG_FLASH_SECONDS = _num("FG_FLASH_SECONDS", 5)   # for a Vikings field goal / safety
 OPPONENT_SECONDS = _num("OPPONENT_SECONDS", 5)   # how long the red pulse lasts
 FLASH_SPEED = _num("FLASH_SPEED", 0.8)           # seconds between bright/dim
+# Every light flashes, even ones that are off. Set variable FLASH_OFF_LIGHTS to "false"
+# to leave lights that are off alone.
+FLASH_OFF_LIGHTS = os.environ.get("FLASH_OFF_LIGHTS", "true").strip().lower() == "true"
+# Any light with this word in its Govee app name never flashes (rename it in the Govee app).
+QUIET_WORD = os.environ.get("QUIET_WORD", "quiet").strip().lower()
+# Master switch: set variable LIGHTS_ENABLED to "false" to pause everything.
+LIGHTS_ENABLED = os.environ.get("LIGHTS_ENABLED", "true").strip().lower() != "false"
 
 # When the OTHER team scores:
-OPPONENT_FLASH = True        # False = do nothing when they score
+OPPONENT_FLASH = os.environ.get("OPPONENT_FLASH", "true").strip().lower() != "false"
 OPPONENT_COLOR = "red"       # "red", or "team" to use the opponent's own team color
 RED = (255, 0, 0)
 
@@ -179,9 +186,34 @@ def phone_alert(title, message):
         print(f"  Phone alert failed: {e}")
 
 
-def celebrate(seconds):
-    print(f"  SKOL! Flashing purple for {seconds:g}s")
+def _prepare():
+    """Snapshot every light, then limit flashing to the lights that are on (unless told otherwise).
+    Returns (all_devices, snapshots) so the caller can put everything back."""
+    global DEVICES
+    everything = DEVICES
     snapshots = all_lights(get_state)
+    if not FLASH_OFF_LIGHTS:
+        DEVICES = [d for d, s in zip(everything, snapshots) if s.get("powerSwitch") != 0]
+        left_off = len(everything) - len(DEVICES)
+        if left_off:
+            print(f"  Leaving {left_off} light(s) alone because they're off")
+    return everything, snapshots
+
+
+def _finish(everything, snapshots):
+    global DEVICES
+    keep = {d["device"] for d in DEVICES}
+    restore_pairs = [(d, s) for d, s in zip(everything, snapshots) if d["device"] in keep]
+    DEVICES = [d for d, _ in restore_pairs]
+    restore([s for _, s in restore_pairs])
+    DEVICES = everything
+
+
+def celebrate(seconds):
+    if seconds <= 0:
+        return
+    print(f"  SKOL! Flashing purple for {seconds:g}s")
+    everything, snapshots = _prepare()
     set_power(True)
     set_color(PURPLE)
     end = time.time() + seconds
@@ -192,12 +224,14 @@ def celebrate(seconds):
         time.sleep(FLASH_SPEED)
     set_brightness(100)
     time.sleep(1)
-    restore(snapshots)
+    _finish(everything, snapshots)
 
 
 def opponent_scored(color=RED):
+    if OPPONENT_SECONDS <= 0 or not OPPONENT_FLASH:
+        return
     print(f"  Ugh. Red pulse for {OPPONENT_SECONDS:g}s")
-    snapshots = all_lights(get_state)
+    everything, snapshots = _prepare()
     set_power(True)
     set_color(color)
     end = time.time() + OPPONENT_SECONDS
@@ -207,7 +241,7 @@ def opponent_scored(color=RED):
         set_brightness(15)
         time.sleep(FLASH_SPEED * 1.5)
     time.sleep(1)
-    restore(snapshots)
+    _finish(everything, snapshots)
 
 
 def hex_to_rgb(h):
@@ -331,6 +365,15 @@ if __name__ == "__main__":
         sys.exit()
     if not DEVICES:
         DEVICES = load_all_color_lights()
+        try:  # list of light names for the control app
+            with open("lights.json", "w") as f:
+                json.dump(sorted({d["name"] or d["sku"] for d in DEVICES}), f, indent=1)
+        except OSError:
+            pass
+        quiet = [d["name"] for d in DEVICES if QUIET_WORD and QUIET_WORD in d["name"].lower()]
+        if quiet:
+            DEVICES = [d for d in DEVICES if d["name"] not in quiet]
+            print("Quiet (won't flash): " + ", ".join(quiet))
         skip = [x.strip().lower() for x in SKIP_LIGHTS.split(",") if x.strip()]
         if skip:
             skipped = [d["name"] for d in DEVICES if d["name"].strip().lower() in skip]
@@ -339,6 +382,8 @@ if __name__ == "__main__":
         print(f"Using all {len(DEVICES)} color lights: " + ", ".join(d["name"] or d["sku"] for d in DEVICES))
     if not DEVICES:
         sys.exit("No color-capable Govee lights found on this account.")
+    if not LIGHTS_ENABLED and "--test" not in sys.argv:
+        sys.exit("Paused (LIGHTS_ENABLED is false).")
     if "--github" in sys.argv:
         # Run by GitHub every hour: only does anything if a Vikings game starts
         # within the next ~75 min or is already going. Otherwise exits in seconds.

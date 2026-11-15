@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3b1f6b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Game Day Lights</title>
+<style>
+  :root { --purple:#4f2683; --deep:#2a1450; --gold:#ffc62f; --bg:#f4f1f8; --card:#fff; --text:#1d1530; --muted:#6b6280; --line:#e4dfec; --red:#d63b3b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:-apple-system, system-ui, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--deep); color:#fff; padding:22px 18px 18px; }
+  header h1 { margin:0; font-size:22px; font-weight:600; }
+  header p { margin:4px 0 0; color:#cfc4e6; font-size:14px; }
+  main { padding:14px; max-width:520px; margin:0 auto; }
+  .card { background:var(--card); border-radius:14px; padding:16px; margin-bottom:12px; border:1px solid var(--line); }
+  .card h2 { margin:0 0 12px; font-size:15px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; }
+  .row + .row { border-top:1px solid var(--line); }
+  .label { font-size:17px; }
+  .sub { font-size:13px; color:var(--muted); margin-top:2px; }
+  .switch { position:relative; width:54px; height:32px; flex:none; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider { position:absolute; inset:0; background:#cfc8da; border-radius:32px; transition:.2s; }
+  .slider:before { content:""; position:absolute; width:26px; height:26px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+  .switch input:checked + .slider { background:var(--purple); }
+  .switch input:checked + .slider:before { transform:translateX(22px); }
+  .big { display:flex; align-items:center; justify-content:space-between; }
+  .big .label { font-size:20px; font-weight:600; }
+  .status { font-size:14px; color:var(--muted); margin-top:4px; }
+  .range { width:100%; }
+  .range-head { display:flex; justify-content:space-between; font-size:17px; margin-bottom:6px; }
+  .range-head b { color:var(--purple); }
+  input[type=range] { width:100%; accent-color:var(--purple); height:28px; }
+  .block + .block { margin-top:16px; }
+  button { font:inherit; border:0; border-radius:12px; padding:14px; width:100%; font-size:17px; font-weight:600; cursor:pointer; }
+  .primary { background:var(--purple); color:#fff; }
+  .gold { background:var(--gold); color:#2a1450; }
+  .ghost { background:transparent; color:var(--purple); padding:8px; font-size:15px; font-weight:500; }
+  input[type=text], input[type=password] { width:100%; font:inherit; font-size:16px; padding:12px; border:1px solid var(--line); border-radius:10px; }
+  .light { display:flex; align-items:center; gap:12px; padding:12px 0; font-size:17px; }
+  .light + .light { border-top:1px solid var(--line); }
+  .light input { width:24px; height:24px; accent-color:var(--purple); flex:none; }
+  .dot { width:12px; height:12px; border-radius:50%; flex:none; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--deep); color:#fff; padding:12px 18px; border-radius:24px; font-size:15px; opacity:0; transition:.25s; pointer-events:none; max-width:90%; text-align:center; }
+  .toast.show { opacity:1; }
+  .err { color:var(--red); font-size:14px; margin-top:8px; }
+  .hidden { display:none; }
+  .muted { color:var(--muted); font-size:14px; }
+  .savebar { position:sticky; bottom:0; padding:10px 0 14px; background:linear-gradient(transparent, var(--bg) 30%); }
+  a { color:var(--purple); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Game Day Lights</h1>
+  <p id="sub">Flash the house when the Vikings score</p>
+</header>
+<main>
+
+  <!-- One-time sign in -->
+  <section id="setup" class="card hidden">
+    <h2>One-time setup</h2>
+    <p class="muted">Paste the GitHub access key you made. It's saved only on this phone.</p>
+    <input id="tokenInput" type="password" placeholder="github_pat_..." autocomplete="off">
+    <div style="height:10px"></div>
+    <button class="primary" id="saveToken">Connect</button>
+    <div id="setupErr" class="err"></div>
+  </section>
+
+  <div id="app" class="hidden">
+    <section class="card">
+      <div class="big">
+        <div>
+          <div class="label">Game day lights</div>
+          <div class="status" id="masterStatus"></div>
+        </div>
+        <label class="switch"><input type="checkbox" id="enabled"><span class="slider"></span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>How long they flash</h2>
+      <div class="block">
+        <div class="range-head"><span><span class="dot" style="display:inline-block;background:var(--purple)"></span> Vikings touchdown</span><b id="tdOut"></b></div>
+        <input type="range" id="td" min="0" max="30" step="1">
+      </div>
+      <div class="block">
+        <div class="range-head"><span><span class="dot" style="display:inline-block;background:var(--purple)"></span> Vikings field goal</span><b id="fgOut"></b></div>
+        <input type="range" id="fg" min="0" max="30" step="1">
+      </div>
+      <div class="block">
+        <div class="range-head"><span><span class="dot" style="display:inline-block;background:var(--red)"></span> Other team scores</span><b id="oppOut"></b></div>
+        <input type="range" id="opp" min="0" max="30" step="1">
+      </div>
+      <div class="block">
+        <div class="range-head"><span>Flash speed</span><b id="speedOut"></b></div>
+        <input type="range" id="speed" min="0.4" max="2" step="0.1">
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Which lights flash</h2>
+      <div id="lights"></div>
+      <div class="row">
+        <div><div class="label">Turn on lights that are off</div><div class="sub">Off = lights that are off stay off</div></div>
+        <label class="switch"><input type="checkbox" id="offLights"><span class="slider"></span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Phone alert</h2>
+      <p class="muted" style="margin-top:0">Optional. Install the free ntfy app, subscribe to a made-up name, and enter that same name here. Leave blank for no alerts.</p>
+      <input type="text" id="ntfy" placeholder="brian-vikings-7731" autocomplete="off" autocapitalize="off">
+    </section>
+
+    <div class="savebar">
+      <button class="primary" id="save">Save</button>
+      <div style="height:10px"></div>
+      <button class="gold" id="test">Test my lights now</button>
+      <button class="ghost" id="signout">Disconnect this phone</button>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const host = location.hostname.endsWith(".github.io") ? location.hostname.split(".")[0] : "larsonbp19";
+  const repoPath = location.pathname.split("/").filter(Boolean)[0];
+  const OWNER = host, REPO = location.hostname.endsWith(".github.io") && repoPath ? repoPath : "Vikings-Lights-Mcgee";
+  const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
+  const $ = id => document.getElementById(id);
+  const store = {
+    get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: k => { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  let token = store.get("gh_token");
+  let lightNames = [];
+
+  const DEFAULTS = { LIGHTS_ENABLED:"true", FLASH_SECONDS:"10", FG_FLASH_SECONDS:"5", OPPONENT_SECONDS:"5", FLASH_SPEED:"0.8", FLASH_OFF_LIGHTS:"true", SKIP_LIGHTS:"", NTFY_TOPIC:"" };
+  let vars = { ...DEFAULTS };
+
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600); }
+
+  async function gh(path, opts = {}) {
+    const res = await fetch(API + path, { ...opts, headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) } });
+    if (!res.ok && res.status !== 404) {
+      const body = await res.text();
+      const err = new Error(`${res.status}: ${body.slice(0, 160)}`); err.status = res.status; throw err;
+    }
+    return res;
+  }
+
+  async function loadVars() {
+    const res = await gh("/actions/variables?per_page=50");
+    if (res.status === 404) throw Object.assign(new Error("Can't see the project. Check the key's repository access."), { status: 404 });
+    const data = await res.json();
+    vars = { ...DEFAULTS };
+    for (const v of data.variables || []) vars[v.name] = v.value;
+  }
+
+  async function loadLights() {
+    const res = await gh("/contents/lights.json", { headers: { "Accept": "application/vnd.github.raw+json" } });
+    if (res.status === 404) { lightNames = []; return; }
+    try { lightNames = JSON.parse(await res.text()); } catch (e) { lightNames = []; }
+  }
+
+  async function setVar(name, value) {
+    value = String(value);
+    if (value === "") { await gh(`/actions/variables/${name}`, { method: "DELETE" }); return; }
+    const res = await gh(`/actions/variables/${name}`, { method: "PATCH", body: JSON.stringify({ name, value }) });
+    if (res.status === 404) await gh("/actions/variables", { method: "POST", body: JSON.stringify({ name, value }) });
+  }
+
+  function secs(v) { return Number(v) <= 0 ? "Off" : `${Number(v)} sec`; }
+
+  function render() {
+    const on = vars.LIGHTS_ENABLED.toLowerCase() !== "false";
+    $("enabled").checked = on;
+    $("masterStatus").textContent = on ? "On: lights flash during Vikings games" : "Paused: nothing will flash";
+    $("td").value = vars.FLASH_SECONDS; $("fg").value = vars.FG_FLASH_SECONDS; $("opp").value = vars.OPPONENT_SECONDS; $("speed").value = vars.FLASH_SPEED;
+    $("offLights").checked = vars.FLASH_OFF_LIGHTS.toLowerCase() !== "false";
+    $("ntfy").value = vars.NTFY_TOPIC || "";
+    updateOutputs();
+    const skip = (vars.SKIP_LIGHTS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    const box = $("lights");
+    box.innerHTML = "";
+    if (!lightNames.length) {
+      box.innerHTML = '<p class="muted">Your lights show up here after the first test. Tap "Test my lights now" below, wait a couple of minutes, then reopen this page.</p>';
+      return;
+    }
+    for (const name of lightNames) {
+      const row = document.createElement("label");
+      row.className = "light";
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = !skip.includes(name.trim().toLowerCase()); cb.dataset.name = name;
+      const span = document.createElement("span"); span.textContent = name;
+      row.append(cb, span); box.append(row);
+    }
+  }
+
+  function updateOutputs() {
+    $("tdOut").textContent = secs($("td").value);
+    $("fgOut").textContent = secs($("fg").value);
+    $("oppOut").textContent = secs($("opp").value);
+    $("speedOut").textContent = Number($("speed").value).toFixed(1) + " sec";
+  }
+
+  async function save(silent) {
+    const skipped = [...document.querySelectorAll("#lights input[type=checkbox]")].filter(c => !c.checked).map(c => c.dataset.name);
+    const next = {
+      LIGHTS_ENABLED: $("enabled").checked ? "true" : "false",
+      FLASH_SECONDS: $("td").value, FG_FLASH_SECONDS: $("fg").value, OPPONENT_SECONDS: $("opp").value,
+      FLASH_SPEED: $("speed").value, FLASH_OFF_LIGHTS: $("offLights").checked ? "true" : "false",
+      SKIP_LIGHTS: lightNames.length ? skipped.join(", ") : (vars.SKIP_LIGHTS || ""),
+      NTFY_TOPIC: $("ntfy").value.trim().replace(/[^A-Za-z0-9_-]/g, ""),
+    };
+    $("save").disabled = true; $("save").textContent = "Saving…";
+    try {
+      for (const [k, v] of Object.entries(next)) if ((vars[k] ?? "") !== v) { await setVar(k, v); vars[k] = v; }
+      if (!silent) toast("Saved");
+      render();
+    } catch (e) { toast("Couldn't save. " + (e.status === 403 ? "The key needs Variables: Read and write." : "Try again.")); }
+    finally { $("save").disabled = false; $("save").textContent = "Save"; }
+  }
+
+  async function test() {
+    await save(true);
+    $("test").disabled = true; $("test").textContent = "Starting…";
+    try {
+      const wf = await (await gh("/actions/workflows")).json();
+      const w = (wf.workflows || []).find(x => x.name === "Vikings lights");
+      if (!w) throw new Error("Couldn't find the Vikings lights schedule file.");
+      const r = await gh(`/actions/workflows/${w.id}/dispatches`, { method: "POST", body: JSON.stringify({ ref: "main", inputs: { test: true } }) });
+      if (r.status === 404) throw new Error("Couldn't start the test.");
+      toast("Test started. Lights flash in about a minute.");
+    } catch (e) { toast(e.status === 403 ? "The key needs Actions: Read and write." : e.message); }
+    finally { $("test").disabled = false; $("test").textContent = "Test my lights now"; }
+  }
+
+  async function start() {
+    if (!token) { $("setup").classList.remove("hidden"); $("app").classList.add("hidden"); return; }
+    try {
+      await Promise.all([loadVars(), loadLights()]);
+      $("setup").classList.add("hidden"); $("app").classList.remove("hidden");
+      render();
+    } catch (e) {
+      if (e.status === 401 || e.status === 404) {
+        store.del("gh_token"); token = null;
+        $("setupErr").textContent = e.status === 401 ? "That key didn't work. Make a new one and paste it again." : e.message;
+        $("setup").classList.remove("hidden"); $("app").classList.add("hidden");
+      } else { toast("Couldn't load. Check your connection."); }
+    }
+  }
+
+  $("saveToken").onclick = () => {
+    const v = $("tokenInput").value.trim();
+    if (!v) { $("setupErr").textContent = "Paste your access key first."; return; }
+    $("setupErr").textContent = ""; token = v; store.set("gh_token", v); $("tokenInput").value = ""; start();
+  };
+  $("tokenInput").oninput = () => { $("setupErr").textContent = ""; };
+  ["td", "fg", "opp", "speed"].forEach(id => $(id).oninput = updateOutputs);
+  $("enabled").onchange = () => { save(); };
+  $("save").onclick = () => save();
+  $("test").onclick = test;
+  $("signout").onclick = () => { store.del("gh_token"); token = null; start(); };
+  start();
+})();
+</script>
+</body>
+</html>

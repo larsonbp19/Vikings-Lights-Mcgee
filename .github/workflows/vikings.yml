@@ -42,6 +42,18 @@ jobs:
           ALL_VARS: ${{ toJSON(vars) }}
         run: python vikings_lights.py --github
 
+      - name: Save light list for the app
+        if: always() && github.event.schedule != '0 12 1 * *'
+        run: |
+          [ -f lights.json ] || exit 0
+          git config user.name "vikings-bot"
+          git config user.email "vikings-bot@users.noreply.github.com"
+          git add lights.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update light list"
+          git pull --rebase
+          git push
+
       - name: Keep-alive
         if: github.event.schedule == '0 12 1 * *'
         run: |
