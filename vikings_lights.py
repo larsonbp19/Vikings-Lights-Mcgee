@@ -49,7 +49,7 @@ DEVICES = [
 
 # Lights to leave alone (names as shown in the Govee app, comma-separated).
 # On GitHub, set this in Settings -> Secrets and variables -> Actions -> Variables -> SKIP_LIGHTS
-SKIP_LIGHTS = os.environ.get("SKIP_LIGHTS", "")
+SKIP_LIGHTS = os.environ.get("SKIP_LIGHTS", "Floor Lamp")  # "-" = skip none
 
 # Optional phone alert: install the free "ntfy" app, subscribe to a made-up topic name,
 # and put that same name here (on GitHub: Variables -> NTFY_TOPIC). Blank = no alerts.

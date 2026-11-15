@@ -141,7 +141,7 @@
   let token = store.get("gh_token");
   let lightNames = [];
 
-  const DEFAULTS = { LIGHTS_ENABLED:"true", FLASH_SECONDS:"10", FG_FLASH_SECONDS:"5", OPPONENT_SECONDS:"5", FLASH_SPEED:"0.8", FLASH_OFF_LIGHTS:"true", SKIP_LIGHTS:"", NTFY_TOPIC:"" };
+  const DEFAULTS = { LIGHTS_ENABLED:"true", FLASH_SECONDS:"10", FG_FLASH_SECONDS:"5", OPPONENT_SECONDS:"5", FLASH_SPEED:"0.8", FLASH_OFF_LIGHTS:"true", SKIP_LIGHTS:"Floor Lamp", NTFY_TOPIC:"" };
   let vars = { ...DEFAULTS };
 
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600); }
@@ -216,7 +216,7 @@
       LIGHTS_ENABLED: $("enabled").checked ? "true" : "false",
       FLASH_SECONDS: $("td").value, FG_FLASH_SECONDS: $("fg").value, OPPONENT_SECONDS: $("opp").value,
       FLASH_SPEED: $("speed").value, FLASH_OFF_LIGHTS: $("offLights").checked ? "true" : "false",
-      SKIP_LIGHTS: lightNames.length ? skipped.join(", ") : (vars.SKIP_LIGHTS || ""),
+      SKIP_LIGHTS: lightNames.length ? (skipped.join(", ") || "-") : (vars.SKIP_LIGHTS || ""),
       NTFY_TOPIC: $("ntfy").value.trim().replace(/[^A-Za-z0-9_-]/g, ""),
     };
     $("save").disabled = true; $("save").textContent = "Saving…";
