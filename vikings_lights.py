@@ -143,19 +143,23 @@ def load_all_color_lights():
 
 
 def get_state(dev):
-    """Best-effort snapshot so we can restore the lights after celebrating."""
+    """Best-effort snapshot so we can put each light back the way it was."""
     body = {"requestId": str(uuid.uuid4()),
             "payload": {"sku": dev["sku"], "device": dev["device"]}}
     try:
         caps = govee("POST", "/device/state", body)["payload"]["capabilities"]
-        state = {}
-        for c in caps:
-            inst, val = c.get("instance"), c.get("state", {}).get("value")
-            if inst in ("powerSwitch", "colorRgb", "brightness") and val not in (None, ""):
-                state[inst] = val
-        return state
-    except Exception:
+    except Exception as e:
+        print(f"  Couldn't read {dev.get('name') or dev['device']}: {e}")
         return {}
+    state = {}
+    for c in caps:
+        inst, val = c.get("instance"), c.get("state", {}).get("value")
+        if val in (None, "", {}):
+            continue
+        state[inst] = val
+    print(f"  Saved {dev.get('name') or dev['device']}: " +
+          ", ".join(f"{k}={state[k]}" for k in ("online", "powerSwitch", "brightness", "colorRgb", "colorTemperatureK") if k in state))
+    return state
 
 
 def restore(snapshots):
@@ -163,12 +167,22 @@ def restore(snapshots):
 
 
 def _restore_one(d, s):
-        if "colorRgb" in s:
-            control(d, "devices.capabilities.color_setting", "colorRgb", s["colorRgb"])
-        if "brightness" in s:
-            control(d, "devices.capabilities.range", "brightness", s["brightness"])
-        if s.get("powerSwitch") == 0:
-            control(d, "devices.capabilities.on_off", "powerSwitch", 0)
+    """Put a light back. Never sets it to black, and only turns it off if Govee
+    clearly said it was off (and online) before the flash."""
+    rgb = s.get("colorRgb")
+    temp = s.get("colorTemperatureK")
+    if isinstance(temp, (int, float)) and temp > 0 and not (isinstance(rgb, int) and rgb > 0):
+        control(d, "devices.capabilities.color_setting", "colorTemperatureK", int(temp))
+    elif isinstance(rgb, int) and rgb > 0:
+        control(d, "devices.capabilities.color_setting", "colorRgb", rgb)
+    else:
+        # Was on a scene or Govee didn't say: go to a normal warm white instead of black.
+        control(d, "devices.capabilities.color_setting", "colorTemperatureK", 2700)
+    bri = s.get("brightness")
+    if isinstance(bri, (int, float)) and bri > 0:
+        control(d, "devices.capabilities.range", "brightness", int(bri))
+    if s.get("powerSwitch") == 0 and s.get("online") in (True, "true"):
+        control(d, "devices.capabilities.on_off", "powerSwitch", 0)
 
 
 def set_brightness(level):
