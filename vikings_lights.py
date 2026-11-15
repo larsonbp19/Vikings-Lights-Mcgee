@@ -167,8 +167,7 @@ def restore(snapshots):
 
 
 def _restore_one(d, s):
-    """Put a light back. Never sets it to black, and only turns it off if Govee
-    clearly said it was off (and online) before the flash."""
+    """Put a light back. Never sets it to black; lights that were off go back off."""
     rgb = s.get("colorRgb")
     temp = s.get("colorTemperatureK")
     if isinstance(temp, (int, float)) and temp > 0 and not (isinstance(rgb, int) and rgb > 0):
@@ -181,7 +180,7 @@ def _restore_one(d, s):
     bri = s.get("brightness")
     if isinstance(bri, (int, float)) and bri > 0:
         control(d, "devices.capabilities.range", "brightness", int(bri))
-    if s.get("powerSwitch") == 0 and s.get("online") in (True, "true"):
+    if s.get("powerSwitch") in (0, "0", False):
         control(d, "devices.capabilities.on_off", "powerSwitch", 0)
 
 
