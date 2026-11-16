@@ -231,6 +231,18 @@ def _finish(everything, snapshots):
     restore([s for _, s in restore_pairs])
     time.sleep(4)
     restore([s for _, s in restore_pairs])  # send it twice so a dropped command can't leave a light red/purple
+    # Check every light; any still showing a flash color gets fixed again.
+    flash_colors = {rgb_int(PURPLE), rgb_int(RED)}
+    for attempt in range(3):
+        time.sleep(5)
+        now = all_lights(get_state)
+        stuck = [(d, s) for (d, s), n in zip(restore_pairs, now)
+                 if n.get("colorRgb") in flash_colors and s.get("colorRgb") not in flash_colors]
+        if not stuck:
+            break
+        print(f"  {len(stuck)} light(s) still showing flash color, fixing again")
+        DEVICES = [d for d, _ in stuck]
+        restore([s for _, s in stuck])
     DEVICES = everything
 
 
@@ -364,6 +376,16 @@ def watch_game():
         time.sleep(POLL_LIVE)
 
 
+def unstick():
+    """Any light currently left purple or red from a flash goes to warm white."""
+    flash_colors = {rgb_int(PURPLE), rgb_int(RED)}
+    states = all_lights(get_state)
+    stuck = [d for d, st in zip(DEVICES, states) if st.get("colorRgb") in flash_colors]
+    print(f"Stuck lights: {', '.join(d.get('name') or d['device'] for d in stuck) or 'none'}")
+    for d in stuck:
+        control(d, "devices.capabilities.color_setting", "colorTemperatureK", 2700)
+
+
 def cleanup_game():
     """Helper for an older watcher that left off-lights on: remember which lights are off,
     and after each flash, switch those back off."""
@@ -450,6 +472,9 @@ if __name__ == "__main__":
         sys.exit()
     if not LIGHTS_ENABLED and "--test" not in sys.argv:
         sys.exit("Paused (LIGHTS_ENABLED is false).")
+    if "--unstick" in sys.argv:
+        unstick()
+        sys.exit()
     if "--cleanup" in sys.argv:
         cleanup_game()
         sys.exit()
